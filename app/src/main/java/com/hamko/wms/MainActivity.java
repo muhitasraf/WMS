@@ -8,6 +8,7 @@ import androidx.core.content.FileProvider;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.app.Notification;
@@ -42,6 +43,8 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.text.DateFormat;
 import java.util.Date;
 
@@ -52,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
     SwipeRefreshLayout mySwipeRefreshLayout;
     private ValueCallback<Uri[]> fileChooserCallback;
     Context context;
+    @SuppressLint("AddJavascriptInterface")
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,8 +86,8 @@ public class MainActivity extends AppCompatActivity {
 
             webview.getSettings().setAllowFileAccess(true);
             webview.getSettings().setAllowContentAccess(true);
-            webview.getSettings().setBlockNetworkImage(false);
-            webview.getSettings().setBlockNetworkImage(false);
+            webview.getSettings().setAllowFileAccessFromFileURLs(true);
+            webview.getSettings().setAllowUniversalAccessFromFileURLs(true);
             webview.getSettings().setBlockNetworkImage(false);
             webview.getSettings().setDisplayZoomControls(false);
             webview.getSettings().setDomStorageEnabled(true);
@@ -96,6 +100,12 @@ public class MainActivity extends AppCompatActivity {
             webview.getSettings().setPluginState(WebSettings.PluginState.ON);
             webview.getSettings().setSupportMultipleWindows(true);
             webview.getSettings().setUseWideViewPort(true);
+            webview.getSettings().setDefaultTextEncodingName("utf-8");
+            webview.addJavascriptInterface(new JavaScriptInterface(MainActivity.this), "Android");
+            webview.getSettings().setUseWideViewPort(true);
+            webview.getSettings().setAppCachePath(MainActivity.this.getApplicationContext().getCacheDir().getAbsolutePath());
+            webview.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
+            webview.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
 
             CookieManager cookieManager = CookieManager.getInstance();
             cookieManager.setAcceptCookie(true);
@@ -152,10 +162,15 @@ public class MainActivity extends AppCompatActivity {
             //webview.setDownloadListener((uri, userAgent, contentDisposition, mimetype, contentLength) -> handleURI(uri));
 
             webview.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
-                Log.d("TAG", "onCreate: "+url+"-"+"mimeType");
+                try {
+                    URLDecoder.decode( url, "UTF-8" );
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                }
+                Log.d("TAG", "onCreate: "+url+"-"+mimeType);
                 if(isStoragePermissionGranted()){
                     try {
-                        //url = url.replace("blob:","").trim();
+                        url = url.replace("blob:","").trim();
                         DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
 
                         request.setMimeType(mimeType);
