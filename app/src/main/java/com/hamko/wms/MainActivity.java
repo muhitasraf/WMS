@@ -3,7 +3,6 @@ package com.hamko.wms;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
 import androidx.core.content.FileProvider;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
@@ -23,9 +22,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Handler;
 import android.util.Base64;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
@@ -43,8 +40,6 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
 import java.text.DateFormat;
 import java.util.Date;
 
@@ -67,16 +62,15 @@ public class MainActivity extends AppCompatActivity {
             setContentView(R.layout.activity_main);
             //Todo: alert the person knowing they are about to close
             new AlertDialog.Builder(this)
-                    .setTitle("No internet connection available")
-                    .setMessage("Please Check you're Mobile data or Wifi network.")
-                    .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            finish();
-                        }
-                    })
-                    //.setNegativeButton("No", null)
-                    .show();
+                .setTitle("No internet connection available")
+                .setMessage("Please Check you're Mobile data or Wifi network.")
+                .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        finish();
+                    }
+                })
+                .show();
         } else {
             //Todo: All Webview stuff Goes Here
             webview = findViewById(R.id.webView);
@@ -101,11 +95,11 @@ public class MainActivity extends AppCompatActivity {
             webview.getSettings().setSupportMultipleWindows(true);
             webview.getSettings().setUseWideViewPort(true);
             webview.getSettings().setDefaultTextEncodingName("utf-8");
-            webview.addJavascriptInterface(new JavaScriptInterface(MainActivity.this), "Android");
             webview.getSettings().setUseWideViewPort(true);
             webview.getSettings().setAppCachePath(MainActivity.this.getApplicationContext().getCacheDir().getAbsolutePath());
             webview.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
             webview.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+            webview.addJavascriptInterface(new JavaScriptInterface(MainActivity.this), "Android");
 
             CookieManager cookieManager = CookieManager.getInstance();
             cookieManager.setAcceptCookie(true);
@@ -159,18 +153,15 @@ public class MainActivity extends AppCompatActivity {
                 }
                 return false;
             });
-            //webview.setDownloadListener((uri, userAgent, contentDisposition, mimetype, contentLength) -> handleURI(uri));
 
             webview.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
-                try {
-                    URLDecoder.decode( url, "UTF-8" );
-                } catch (UnsupportedEncodingException e) {
-                    e.printStackTrace();
-                }
-                Log.d("TAG", "onCreate: "+url+"-"+mimeType);
                 if(isStoragePermissionGranted()){
-                    try {
-                        url = url.replace("blob:","").trim();
+                    if(url.startsWith("blob:")) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                            webview.evaluateJavascript(JavaScriptInterface.getBase64StringFromBlobUrl(url,mimeType), null);
+                        }
+                    }else {
+                        //url = url.trim();
                         DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
 
                         request.setMimeType(mimeType);
@@ -187,34 +178,24 @@ public class MainActivity extends AppCompatActivity {
                         DownloadManager dm = (DownloadManager) context.getSystemService(DOWNLOAD_SERVICE);
                         dm.enqueue(request);
                         Toast.makeText(context,"Downloading", Toast.LENGTH_LONG).show();
-                    }catch (Exception e){
-                        Log.e("TAG", "onCreate: ", e);
-                        webview.loadUrl(JavaScriptInterface.getBase64StringFromBlobUrl(url));
                     }
                 }else {
                     Toast.makeText(context,"Storage permission need", Toast.LENGTH_LONG).show();
                 }
             });
-//            webview.setOnLongClickListener(v -> {
-//                handleURI(((WebView) v).getHitTestResult().getExtra());
-//                return true;
-//            });
-
             webview.loadUrl(websiteURL);
             webview.setWebViewClient(new WebViewClientDemo());
-
         }
 
         //Todo: Swipe refresh functionality
         mySwipeRefreshLayout = this.findViewById(R.id.swipeContainer);
-
         mySwipeRefreshLayout.setOnRefreshListener(
-                new SwipeRefreshLayout.OnRefreshListener() {
-                    @Override
-                    public void onRefresh() {
-                        webview.reload();
-                    }
+            new SwipeRefreshLayout.OnRefreshListener() {
+                @Override
+                public void onRefresh() {
+                    webview.reload();
                 }
+            }
         );
     }
 
@@ -241,16 +222,16 @@ public class MainActivity extends AppCompatActivity {
         } else {
             //Todo: If the webview cannot go back any further
             new AlertDialog.Builder(this)
-                    .setTitle("EXIT")
-                    .setMessage("Are you sure. You want to close this app?")
-                    .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            finish();
-                        }
-                    })
-                    .setNegativeButton("No", null)
-                    .show();
+                .setTitle("EXIT")
+                .setMessage("Are you sure. You want to close this app?")
+                .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        finish();
+                    }
+                })
+                .setNegativeButton("No", null)
+                .show();
         }
     }
 
@@ -259,58 +240,54 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, intent);
         if (intent != null) {
             fileChooserCallback.onReceiveValue(new Uri[]{Uri.parse(intent.getDataString())});
-        }else {
+        } else {
             fileChooserCallback.onReceiveValue(null);
         }
         fileChooserCallback = null;
     }
 
-//    private void handleURI(String uri) {
-//        if (uri != null) {
-//            Intent intent = new Intent(Intent.ACTION_VIEW);
-//            intent.setData(Uri.parse(uri.replaceFirst("^blob:", "")));
-//            startActivity(intent);
-//        }
-//    }
-
     public  boolean isStoragePermissionGranted() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
-                Log.v("Storage","Permission is granted");
                 return true;
             } else {
-                Log.v("Storage","Permission is revoked");
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
                 return false;
             }
         } else {
             //Todo: Permission is automatically granted on sdk<23
-            Log.v("Storage","Permission is granted");
             return true;
         }
     }
 
     public static class JavaScriptInterface {
-        private Context context;
+        private static String fileMimeType;
+        private final Context context;
         public JavaScriptInterface(Context context) {
             this.context = context;
+            Toast.makeText(context, "Blob", Toast.LENGTH_SHORT).show();
         }
 
         @JavascriptInterface
         public void getBase64FromBlobData(String base64Data) throws IOException {
-            convertBase64StringToPdfAndStoreIt(base64Data);
+            Toast.makeText(context, "Blob Called", Toast.LENGTH_SHORT).show();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                convertBase64StringToFileAndStoreIt(base64Data);
+            }
         }
-        public static String getBase64StringFromBlobUrl(String blobUrl) {
+
+        public static String getBase64StringFromBlobUrl(String blobUrl,String mimeType) {
             if(blobUrl.startsWith("blob")){
+                fileMimeType = mimeType;
                 return "javascript: var xhr = new XMLHttpRequest();" +
                         "xhr.open('GET', '"+ blobUrl +"', true);" +
-                        "xhr.setRequestHeader('Content-type','application/pdf');" +
+                        "xhr.setRequestHeader('Content-type','" + mimeType +";charset=UTF-8');" +
                         "xhr.responseType = 'blob';" +
                         "xhr.onload = function(e) {" +
                         "    if (this.status == 200) {" +
-                        "        var blobPdf = this.response;" +
+                        "        var blobFile = this.response;" +
                         "        var reader = new FileReader();" +
-                        "        reader.readAsDataURL(blobPdf);" +
+                        "        reader.readAsDataURL(blobFile);" +
                         "        reader.onloadend = function() {" +
                         "            base64data = reader.result;" +
                         "            Android.getBase64FromBlobData(base64data);" +
@@ -321,63 +298,50 @@ public class MainActivity extends AppCompatActivity {
             }
             return "javascript: console.log('It is not a Blob URL');";
         }
-        private void convertBase64StringToPdfAndStoreIt(String base64PDf) throws IOException {
+        @RequiresApi(api = Build.VERSION_CODES.O)
+        @SuppressLint("NewApi")
+        private void convertBase64StringToFileAndStoreIt(String base64PDf) throws IOException {
             final int notificationId = 1;
+            Toast.makeText(context, "Base 64 PDF : Downloading", Toast.LENGTH_SHORT).show();
             String currentDateTime = DateFormat.getDateTimeInstance().format(new Date());
-            final File dwldsPath = new File(Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOWNLOADS) + "/YourFileName_" + currentDateTime + "_.pdf");
-            byte[] pdfAsBytes = Base64.decode(base64PDf.replaceFirst("^data:application/pdf;base64,", ""), 0);
-            FileOutputStream os;
-            os = new FileOutputStream(dwldsPath, false);
-            os.write(pdfAsBytes);
-            os.flush();
-
+            String newTime = currentDateTime.replaceFirst(", ","_").replaceAll(" ","_").replaceAll(":","-");
+            MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
+            String extension = mimeTypeMap.getExtensionFromMimeType(fileMimeType);
+            final File dwldsPath = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + newTime + "_." + extension);
+            String regex = "^data:" + fileMimeType + ";base64,";
+            byte[] pdfAsBytes = Base64.decode(base64PDf.replaceFirst(regex, ""), 0);
+            try {
+                FileOutputStream os = new FileOutputStream(dwldsPath);
+                os.write(pdfAsBytes);
+                os.flush();
+                os.close();
+            } catch (Exception e) {
+                Toast.makeText(context, "FAILED TO DOWNLOAD THE FILE!", Toast.LENGTH_SHORT).show();
+                e.printStackTrace();
+            }
             if (dwldsPath.exists()) {
                 Intent intent = new Intent();
                 intent.setAction(android.content.Intent.ACTION_VIEW);
                 Uri apkURI = FileProvider.getUriForFile(context,context.getApplicationContext().getPackageName() + ".provider", dwldsPath);
-                intent.setDataAndType(apkURI, MimeTypeMap.getSingleton().getMimeTypeFromExtension("pdf"));
+                intent.setDataAndType(apkURI, MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension));
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 PendingIntent pendingIntent = PendingIntent.getActivity(context,1, intent, PendingIntent.FLAG_CANCEL_CURRENT);
                 String CHANNEL_ID = "MYCHANNEL";
                 final NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    NotificationChannel notificationChannel= new NotificationChannel(CHANNEL_ID,"name", NotificationManager.IMPORTANCE_LOW);
-                    Notification notification = new Notification.Builder(context,CHANNEL_ID)
-                            .setContentText("You have got something new!")
-                            .setContentTitle("File downloaded")
-                            .setContentIntent(pendingIntent)
-                            .setChannelId(CHANNEL_ID)
-                            .setSmallIcon(android.R.drawable.sym_action_chat)
-                            .build();
-                    if (notificationManager != null) {
-                        notificationManager.createNotificationChannel(notificationChannel);
-                        notificationManager.notify(notificationId, notification);
-                    }
-
-                } else {
-                    NotificationCompat.Builder b = new NotificationCompat.Builder(context, CHANNEL_ID)
-                            .setDefaults(NotificationCompat.DEFAULT_ALL)
-                            .setWhen(System.currentTimeMillis())
-                            .setSmallIcon(android.R.drawable.sym_action_chat)
-                            //.setContentIntent(pendingIntent)
-                            .setContentTitle("MY TITLE")
-                            .setContentText("MY TEXT CONTENT");
-
-                    if (notificationManager != null) {
-                        notificationManager.notify(notificationId, b.build());
-                        Handler h = new Handler();
-                        long delayInMilliseconds = 1000;
-                        h.postDelayed(new Runnable() {
-                            public void run() {
-                                notificationManager.cancel(notificationId);
-                            }
-                        }, delayInMilliseconds);
-                    }
+                NotificationChannel notificationChannel= new NotificationChannel(CHANNEL_ID,"name", NotificationManager.IMPORTANCE_LOW);
+                Notification notification = new Notification.Builder(context,CHANNEL_ID)
+                    .setContentText("You have got something new!")
+                    .setContentTitle("File downloaded")
+                    .setContentIntent(pendingIntent)
+                    .setChannelId(CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .build();
+                if (notificationManager != null) {
+                    notificationManager.createNotificationChannel(notificationChannel);
+                    notificationManager.notify(notificationId, notification);
                 }
             }
-            Toast.makeText(context, "PDF FILE DOWNLOADED!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(context, "FILE DOWNLOADED!", Toast.LENGTH_SHORT).show();
         }
     }
 }
