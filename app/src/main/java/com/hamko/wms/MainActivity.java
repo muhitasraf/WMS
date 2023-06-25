@@ -10,10 +10,6 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -22,11 +18,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.util.Base64;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.webkit.CookieManager;
-import android.webkit.JavascriptInterface;
-import android.webkit.MimeTypeMap;
 import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
@@ -37,15 +31,9 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.text.DateFormat;
-import java.util.Date;
-
 public class MainActivity extends AppCompatActivity {
 
-    String websiteURL = "http://202.53.169.89:1656/439/25/auth/login"; //Sets web url
+    String websiteURL = "http://202.53.169.89:1656/439/25/dealerapp";
     private WebView webview;
     SwipeRefreshLayout mySwipeRefreshLayout;
     private ValueCallback<Uri[]> fileChooserCallback;
@@ -57,20 +45,21 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         context = getApplicationContext();
+        PreferenceHelper.init(context);
         //Todo: returns true if internet available
         if (!CheckNetwork.isInternetAvailable(this)) {
             setContentView(R.layout.activity_main);
             //Todo: alert the person knowing they are about to close
             new AlertDialog.Builder(this)
-                .setTitle("No internet connection available")
-                .setMessage("Please Check you're Mobile data or Wifi network.")
-                .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        finish();
-                    }
-                })
-                .show();
+                    .setTitle("No internet connection available")
+                    .setMessage("Please Check you're Mobile data or Wifi network.")
+                    .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            finish();
+                        }
+                    })
+                    .show();
         } else {
             //Todo: All Webview stuff Goes Here
             webview = findViewById(R.id.webView);
@@ -109,12 +98,16 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView vw, WebResourceRequest request) {
                     if (request.getUrl().toString().contains(websiteURL)) {
+                        // String webUrl = webview.getUrl();
+                        if(request.getUrl().toString().contains("http://202.53.169.89:1656/439/25/auth/logout")){
+
+                        }
+                        Log.d("webUrl-", request.getUrl().toString());
                         vw.loadUrl(request.getUrl().toString());
                     } else {
                         Intent intent = new Intent(Intent.ACTION_VIEW, request.getUrl());
                         vw.getContext().startActivity(intent);
                     }
-
                     return true;
                 }
             });
@@ -148,7 +141,22 @@ public class MainActivity extends AppCompatActivity {
             {
                 WebView vw = (WebView) v;
                 if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_BACK && vw.canGoBack()) {
-                    vw.goBack();
+
+                    if (PreferenceHelper.read("guest",false)){
+                        new AlertDialog.Builder(this)
+                            .setTitle("EXIT")
+                            .setMessage("Are you sure. You want to close this app?")
+                            .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    finish();
+                                }
+                            })
+                            .setNegativeButton("No", null)
+                            .show();
+                    }else {
+                        vw.goBack();
+                    }
                     return true;
                 }
                 return false;
@@ -190,12 +198,12 @@ public class MainActivity extends AppCompatActivity {
         //Todo: Swipe refresh functionality
         mySwipeRefreshLayout = this.findViewById(R.id.swipeContainer);
         mySwipeRefreshLayout.setOnRefreshListener(
-            new SwipeRefreshLayout.OnRefreshListener() {
-                @Override
-                public void onRefresh() {
-                    webview.reload();
+                new SwipeRefreshLayout.OnRefreshListener() {
+                    @Override
+                    public void onRefresh() {
+                        webview.reload();
+                    }
                 }
-            }
         );
     }
 
@@ -204,6 +212,12 @@ public class MainActivity extends AppCompatActivity {
         @Override
         //Todo: Keep webview in app when clicking links
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            if(url.contains("http://202.53.169.89:1656/439/25/dealerpage")){
+                PreferenceHelper.write("guest",false);
+            }
+            if(url.contains("http://202.53.169.89:1656/439/25/auth/logout")){
+                PreferenceHelper.write("guest",true);
+            }
             view.loadUrl(url);
             return true;
         }
@@ -218,7 +232,21 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onBackPressed() {
         if (webview.isFocused() && webview.canGoBack()) {
-            webview.goBack();
+            if (PreferenceHelper.read("guest",false)){
+                new AlertDialog.Builder(this)
+                    .setTitle("EXIT")
+                    .setMessage("Are you sure. You want to close this app?")
+                    .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            finish();
+                        }
+                    })
+                    .setNegativeButton("No", null)
+                    .show();
+            }else {
+                webview.goBack();
+            }
         } else {
             //Todo: If the webview cannot go back any further
             new AlertDialog.Builder(this)
@@ -260,88 +288,4 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public static class JavaScriptInterface {
-        private static String fileMimeType;
-        private final Context context;
-        public JavaScriptInterface(Context context) {
-            this.context = context;
-            Toast.makeText(context, "Blob", Toast.LENGTH_SHORT).show();
-        }
-
-        @JavascriptInterface
-        public void getBase64FromBlobData(String base64Data) throws IOException {
-            Toast.makeText(context, "Blob Called", Toast.LENGTH_SHORT).show();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                convertBase64StringToFileAndStoreIt(base64Data);
-            }
-        }
-
-        public static String getBase64StringFromBlobUrl(String blobUrl,String mimeType) {
-            if(blobUrl.startsWith("blob")){
-                fileMimeType = mimeType;
-                return "javascript: var xhr = new XMLHttpRequest();" +
-                        "xhr.open('GET', '"+ blobUrl +"', true);" +
-                        "xhr.setRequestHeader('Content-type','" + mimeType +";charset=UTF-8');" +
-                        "xhr.responseType = 'blob';" +
-                        "xhr.onload = function(e) {" +
-                        "    if (this.status == 200) {" +
-                        "        var blobFile = this.response;" +
-                        "        var reader = new FileReader();" +
-                        "        reader.readAsDataURL(blobFile);" +
-                        "        reader.onloadend = function() {" +
-                        "            base64data = reader.result;" +
-                        "            Android.getBase64FromBlobData(base64data);" +
-                        "        }" +
-                        "    }" +
-                        "};" +
-                        "xhr.send();";
-            }
-            return "javascript: console.log('It is not a Blob URL');";
-        }
-        @RequiresApi(api = Build.VERSION_CODES.O)
-        @SuppressLint("NewApi")
-        private void convertBase64StringToFileAndStoreIt(String base64PDf) throws IOException {
-            final int notificationId = 1;
-            Toast.makeText(context, "Base 64 PDF : Downloading", Toast.LENGTH_SHORT).show();
-            String currentDateTime = DateFormat.getDateTimeInstance().format(new Date());
-            String newTime = currentDateTime.replaceFirst(", ","_").replaceAll(" ","_").replaceAll(":","-");
-            MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
-            String extension = mimeTypeMap.getExtensionFromMimeType(fileMimeType);
-            final File dwldsPath = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + newTime + "_." + extension);
-            String regex = "^data:" + fileMimeType + ";base64,";
-            byte[] pdfAsBytes = Base64.decode(base64PDf.replaceFirst(regex, ""), 0);
-            try {
-                FileOutputStream os = new FileOutputStream(dwldsPath);
-                os.write(pdfAsBytes);
-                os.flush();
-                os.close();
-            } catch (Exception e) {
-                Toast.makeText(context, "FAILED TO DOWNLOAD THE FILE!", Toast.LENGTH_SHORT).show();
-                e.printStackTrace();
-            }
-            if (dwldsPath.exists()) {
-                Intent intent = new Intent();
-                intent.setAction(android.content.Intent.ACTION_VIEW);
-                Uri apkURI = FileProvider.getUriForFile(context,context.getApplicationContext().getPackageName() + ".provider", dwldsPath);
-                intent.setDataAndType(apkURI, MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension));
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                PendingIntent pendingIntent = PendingIntent.getActivity(context,1, intent, PendingIntent.FLAG_CANCEL_CURRENT);
-                String CHANNEL_ID = "MYCHANNEL";
-                final NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-                NotificationChannel notificationChannel= new NotificationChannel(CHANNEL_ID,"name", NotificationManager.IMPORTANCE_LOW);
-                Notification notification = new Notification.Builder(context,CHANNEL_ID)
-                    .setContentText("You have got something new!")
-                    .setContentTitle("File downloaded")
-                    .setContentIntent(pendingIntent)
-                    .setChannelId(CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                    .build();
-                if (notificationManager != null) {
-                    notificationManager.createNotificationChannel(notificationChannel);
-                    notificationManager.notify(notificationId, notification);
-                }
-            }
-            Toast.makeText(context, "FILE DOWNLOADED!", Toast.LENGTH_SHORT).show();
-        }
-    }
 }
