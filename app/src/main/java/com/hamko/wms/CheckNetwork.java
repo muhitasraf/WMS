@@ -9,7 +9,8 @@ public class CheckNetwork {
     private static final String TAG = CheckNetwork.class.getSimpleName();
 
     public static boolean isInternetAvailable(Context context) {
-        @SuppressLint("MissingPermission") NetworkInfo info = (NetworkInfo) ((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo();
+        @SuppressLint("MissingPermission")
+        NetworkInfo info = (NetworkInfo) ((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo();
         if (info == null) {
             return false;
         } else {

@@ -3,7 +3,7 @@ package com.hamko.wms;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.FileProvider;
+import androidx.core.content.ContextCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import android.Manifest;
@@ -31,10 +31,12 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import static android.content.ContentValues.TAG;
+
 public class MainActivity extends AppCompatActivity {
 
-    String websiteURL = "http://202.53.169.89:1656/439/25/dealerapp";
     private WebView webview;
+    public String currentUrl;
     SwipeRefreshLayout mySwipeRefreshLayout;
     private ValueCallback<Uri[]> fileChooserCallback;
     Context context;
@@ -51,15 +53,15 @@ public class MainActivity extends AppCompatActivity {
             setContentView(R.layout.activity_main);
             //Todo: alert the person knowing they are about to close
             new AlertDialog.Builder(this)
-                    .setTitle("No internet connection available")
-                    .setMessage("Please Check you're Mobile data or Wifi network.")
-                    .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            finish();
-                        }
-                    })
-                    .show();
+                .setTitle("No internet connection available")
+                .setMessage("Please Check you're Mobile data or Wifi network.")
+                .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        finish();
+                    }
+                })
+                .show();
         } else {
             //Todo: All Webview stuff Goes Here
             webview = findViewById(R.id.webView);
@@ -89,6 +91,7 @@ public class MainActivity extends AppCompatActivity {
             webview.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
             webview.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
             webview.addJavascriptInterface(new JavaScriptInterface(MainActivity.this), "Android");
+            webview.getSettings().setDatabasePath("/data/data/" + webview.getContext().getPackageName() + "/databases/");
 
             CookieManager cookieManager = CookieManager.getInstance();
             cookieManager.setAcceptCookie(true);
@@ -97,12 +100,8 @@ public class MainActivity extends AppCompatActivity {
                 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView vw, WebResourceRequest request) {
-                    if (request.getUrl().toString().contains(websiteURL)) {
+                    if (request.getUrl().toString().contains(WebURL.homeUrl())) {
                         // String webUrl = webview.getUrl();
-                        if(request.getUrl().toString().contains("http://202.53.169.89:1656/439/25/auth/logout")){
-
-                        }
-                        Log.d("webUrl-", request.getUrl().toString());
                         vw.loadUrl(request.getUrl().toString());
                     } else {
                         Intent intent = new Intent(Intent.ACTION_VIEW, request.getUrl());
@@ -112,10 +111,15 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
             webview.setWebChromeClient(new WebChromeClient() {
+                // For api level bellow 24
+                public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                    // Return false means, web view will handle the link
+                    return false;
+                }
                 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
                 @Override
                 public void onPermissionRequest(final PermissionRequest request) {
-                    request.grant(request.getResources());
+                    handleWebPermission(request);
                 }
 
                 @Override
@@ -142,13 +146,14 @@ public class MainActivity extends AppCompatActivity {
                 WebView vw = (WebView) v;
                 if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_BACK && vw.canGoBack()) {
 
-                    if (PreferenceHelper.read("guest",false)){
+                    if (PreferenceHelper.read("guest",false) || currentUrl.contains(WebURL.dashboardUrl())){
                         new AlertDialog.Builder(this)
                             .setTitle("EXIT")
                             .setMessage("Are you sure. You want to close this app?")
                             .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                                 @Override
                                 public void onClick(DialogInterface dialog, int which) {
+                                    webview.loadUrl(WebURL.logoutUrl());
                                     finish();
                                 }
                             })
@@ -191,31 +196,69 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(context,"Storage permission need", Toast.LENGTH_LONG).show();
                 }
             });
-            webview.loadUrl(websiteURL);
+            Log.d(TAG, "onCreate: "+PreferenceHelper.read("guest",false));
+            if(!PreferenceHelper.read("guest", false)){
+                webview.loadUrl(WebURL.dashboardUrl());
+            }else {
+                webview.loadUrl(WebURL.homeUrl());
+            }
             webview.setWebViewClient(new WebViewClientDemo());
         }
 
         //Todo: Swipe refresh functionality
         mySwipeRefreshLayout = this.findViewById(R.id.swipeContainer);
         mySwipeRefreshLayout.setOnRefreshListener(
-                new SwipeRefreshLayout.OnRefreshListener() {
-                    @Override
-                    public void onRefresh() {
-                        webview.reload();
-                    }
+            new SwipeRefreshLayout.OnRefreshListener() {
+                @Override
+                public void onRefresh() {
+                    webview.reload();
                 }
+            }
         );
     }
 
+
+    PermissionRequest request;
+    int CAMERA_REQUEST_CODE = 100;
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private void handleWebPermission(final PermissionRequest request){
+        this.request = request;
+        for (String permission : request.getResources() ){
+            if (permission.matches("android.webkit.resource.VIDEO_CAPTURE")){
+                Log.d(TAG, "handleWebPermission: ");
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
+                {
+                    // Permission is not granted
+                    Log.d("checkCameraPermissions", "No Camera Permissions");
+                    ActivityCompat.requestPermissions(this, new String[] { Manifest.permission.CAMERA }, CAMERA_REQUEST_CODE);
+                }else {
+                    request.grant(request.getResources());
+                }
+            }
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if(requestCode== CAMERA_REQUEST_CODE){
+            for (int i:grantResults) {
+                if (i == PackageManager.PERMISSION_GRANTED) {
+                    request.grant(request.getResources());
+                }
+            }
+        }
+    }
 
     private class WebViewClientDemo extends WebViewClient {
         @Override
         //Todo: Keep webview in app when clicking links
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            if(url.contains("http://202.53.169.89:1656/439/25/dealerpage")){
+            if(url.contains(WebURL.dashboardUrl())){
                 PreferenceHelper.write("guest",false);
             }
-            if(url.contains("http://202.53.169.89:1656/439/25/auth/logout")){
+            if(url.contains(WebURL.logoutUrl())){
                 PreferenceHelper.write("guest",true);
             }
             view.loadUrl(url);
@@ -223,6 +266,7 @@ public class MainActivity extends AppCompatActivity {
         }
         @Override
         public void onPageFinished(WebView view, String url) {
+            currentUrl = url;
             super.onPageFinished(view, url);
             mySwipeRefreshLayout.setRefreshing(false);
         }
@@ -232,13 +276,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onBackPressed() {
         if (webview.isFocused() && webview.canGoBack()) {
-            if (PreferenceHelper.read("guest",false)){
+            if (PreferenceHelper.read("guest",false)  || currentUrl.contains(WebURL.dashboardUrl())){
                 new AlertDialog.Builder(this)
                     .setTitle("EXIT")
                     .setMessage("Are you sure. You want to close this app?")
                     .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
+                            webview.loadUrl(WebURL.logoutUrl());
                             finish();
                         }
                     })
@@ -255,6 +300,7 @@ public class MainActivity extends AppCompatActivity {
                 .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
+                        webview.loadUrl(WebURL.logoutUrl());
                         finish();
                     }
                 })
